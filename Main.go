@@ -1,47 +1,61 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
+	"github.com/shiena/ansicolor"
+	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/gomail.v2"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 var (
-	err          = godotenv.Load("config.env")
-	DB_USER_NAME = os.Getenv("DB_USER_NAME")
-	DB_PASS_WORD = os.Getenv("DB_PASS_WORD")
-	username     = os.Getenv("USER_NAME")
-	password     = os.Getenv("PASS_WORD")
+	err      = godotenv.Load("config.env")
+	dbUser   = os.Getenv("DB_USER_NAME")
+	dbPass   = os.Getenv("DB_PASS_WORD")
+	dbName   = os.Getenv("DB_NAME")
+	username = os.Getenv("USER_NAME")
+	password = os.Getenv("PASS_WORD")
 )
 
 type Email struct {
-	Id               int       `json:"id"`
-	From             string    `json:"sender"`
-	To               string    `json:"recipient"`
-	Subject          string    `json:"subject"`
-	Body             string    `json:"body"`
-	Attachment       string    `json:"attachment_path"`
-	Template         string    `json:"template_path"`
-	SentTime         time.Time `json:"sent_time"`
-	ScheduleSentTime time.Time `json:"schedule_sent_time"`
-	Status           string    `json:"status"`
+	gorm.Model
+	Id               int
+	From             string
+	To               string
+	Subject          string
+	Body             string
+	Attachment       string
+	Template         string
+	SentTime         time.Time
+	ScheduleSentTime time.Time
+	Status           string
+}
+
+func init() {
+	log.SetFormatter(&logrus.TextFormatter{
+		ForceColors:     true,
+		TimestampFormat: "02/01/2006 15:04",
+		FullTimestamp:   true,
+	})
+	log.SetOutput(ansicolor.NewAnsiColorWriter(os.Stdout))
 }
 
 func main() {
 	if err != nil {
 		log.Fatal("Error loading .env file")
+		return
 	}
-
+	go checkScheduleEmail()
 	r := mux.NewRouter()
 	r.HandleFunc("/send", SendHandler)
 	http.Handle("/", r)
@@ -87,71 +101,69 @@ func SendHandler(w http.ResponseWriter, r *http.Request) {
 		attachment = tempFile.Name()
 	}
 
-	r.ParseForm()          // Parses the request body
+	r.ParseForm() // Parses the request body
+	from := username + "@gmail.com"
 	to := r.Form.Get("to") // x will be "" if parameter is not set
 	subject := r.Form.Get("subject")
 	body := r.Form.Get("body")
-	from := username + "@gmail.com"
-	sentEmail(from, strings.Split(to, ";"), subject, body, attachment, "")
+	schedule := r.Form.Get("schedule")
+	scheduleTime := time.Time{}
+	if schedule != "" {
+		layout := "02-01-2006 15:04"
+		var err error
+		scheduleTime, err = time.Parse(layout, schedule)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "Schedule time format expected: dd-MM-yyyy hh:mm")
+			log.Error("Schedule time wrong format: " + schedule)
+			return
+		}
+
+		saveToDB(from, to, subject, body, attachment, "", time.Time{}, scheduleTime.Add(-time.Hour*7), "PENDING")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "The email has been successfully saved and will automatically be sent when the time comes.")
+		return
+	}
+
+	if !sentEmail(from, strings.Split(to, ";"), subject, body, attachment, "") {
+		saveToDB(from, to, subject, body, attachment, "", time.Time{}, time.Time{}, "ERROR")
+	} else {
+		saveToDB(from, to, subject, body, attachment, "", time.Now(), time.Time{}, "SENT")
+	}
+
 	fmt.Fprintf(w, "The email has been sent successfully!")
 }
 
-func sentEmail(from string, to []string, subject string, body string, attachmentPath string, template string) {
+func sentEmail(from string, to []string, subject string, body string, atm string, template string) bool {
 	m := gomail.NewMessage()
 	m.SetHeader("From", from)
 	m.SetHeader("To", to...)
 	m.SetHeader("Subject", subject)
 	m.SetBody("text/html", body)
-	if attachmentPath != "" {
-		m.Attach(attachmentPath)
+	if atm != "" {
+		m.Attach(atm)
 	}
 
 	d := gomail.NewDialer("smtp.gmail.com", 587, username, password)
 
 	// Send the email to Bob, Cora and Dan.
 	if err := d.DialAndSend(m); err != nil {
-		saveToDB(from, to, subject, body, attachmentPath, template, time.Now(), "", "ERROR")
-		panic(err)
+		return false
 	}
-	saveToDB(from, to, subject, body, attachmentPath, template, time.Now(), "", "SENT")
+	return true
 }
 
-func saveToDB(from string, to []string, subject string, body string, attachmentPath string, template string, sentTime time.Time, scheduleSendTime string, status string) {
-	db, err := sql.Open("mysql", DB_USER_NAME+":"+DB_PASS_WORD+"@/testdb?parseTime=true")
-
+func saveToDB(from string, to string, subject string, body string, atm string, template string, sentTime time.Time, scheduleSendTime time.Time, status string) {
+	dsn := "root:@/testdb?charset=utf8mb4&parseTime=True&loc=Local"
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
-		panic(err.Error())
+		log.Fatal("Failed to connect database")
+		panic("Failed to connect database")
 	}
-	defer db.Close()
-	insert, err := db.Query(fmt.Sprintf("INSERT INTO emails VALUES ( 0,  '%v', '%v', '%v', '%v', '%v', '%v', '%v', '%v', '%v');", from, convertArrayToString(to), subject, body, attachmentPath, template, sentTime, scheduleSendTime, status))
-	if err != nil {
-		panic(err.Error())
-	}
-	// be careful deferring Queries if you are using transactions
-	defer insert.Close()
-}
-
-func getAll() []Email {
-	db, err := sql.Open("mysql", DB_USER_NAME+":"+DB_PASS_WORD+"@/testdb?parseTime=true")
-
-	if err != nil {
-		panic(err.Error())
-	}
-	defer db.Close()
-	emails := []Email{}
-	results, err := db.Query("SELECT * FROM emails")
-	if err != nil {
-		panic(err.Error())
-	}
-	for results.Next() {
-		var email Email
-		err = results.Scan(&email.Id, &email.From, &email.To, &email.Subject, &email.Body, &email.Attachment, &email.Template, &email.SentTime, &email.ScheduleSentTime, &email.Status)
-		if err != nil {
-			panic(err.Error())
-		}
-		emails = append(emails, email)
-	}
-	return emails
+	// Migrate the schema
+	db.AutoMigrate(&Email{})
+	// Create
+	db.Create(&Email{From: from, To: to, Subject: subject, Body: body, Attachment: atm, Template: template, SentTime: sentTime, ScheduleSentTime: scheduleSendTime, Status: status})
 }
 
 func convertArrayToString(emails []string) string {
@@ -160,4 +172,29 @@ func convertArrayToString(emails []string) string {
 		result += ";" + emails[i]
 	}
 	return result
+}
+
+func checkScheduleEmail() {
+	for {
+		dsn := "root:@/testdb?charset=utf8mb4&parseTime=True&loc=Local"
+		db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+		if err != nil {
+			log.Fatal("Failed to connect database")
+			panic("Failed to connect database")
+		}
+		var emails []Email
+		db.Where("status = ?", "PENDING").Find(&emails)
+		for _, email := range emails {
+			if email.ScheduleSentTime.Before(time.Now()) {
+				if sentEmail(email.From, strings.Split(email.To, ";"), email.Subject, email.Body, email.Attachment, email.Template) {
+					db.Model(&email).Updates(Email{SentTime: time.Now(), Status: "SENT"})
+					log.Info("Schedule mail has been sent!")
+				} else {
+					db.Model(&email).Updates(Email{Status: "ERROR"})
+					log.Warn("Schedule mail sent failed!")
+				}
+			}
+		}
+		time.Sleep(time.Second * 20)
+	}
 }
