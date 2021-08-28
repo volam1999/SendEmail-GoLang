@@ -28,7 +28,7 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(json)
 }
 
-func GetByIdHanler(w http.ResponseWriter, r *http.Request) {
+func GetByIdHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -47,43 +47,44 @@ func SendHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse our multipart form, 5 << 20 specifies a maximum
 	// upload of 5 MB files.
 	r.ParseMultipartForm(5 << 20)
-	file, handler, err := r.FormFile("attactment")
-	attachment := ""
-	if err != nil {
-		log.Info("this email has no acttachments")
-	} else {
-		defer file.Close()
+	files := r.MultipartForm.File["attachments"]
 
-		if handler.Size > (5 << 20) {
+	attachments := []string{}
+	for _, file := range files {
+		if file.Size > (5 << 20) {
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, "the maximum size of attachments is 5MB")
+			fmt.Fprintf(w, "file {%v} has passed the maximum allowed size of attachments is 5MB", file.Filename)
 			return
 		}
+		ext := file.Filename[len(file.Filename)-4:]
 
-		ext := handler.Filename[len(handler.Filename)-4:]
-		// Create a temporary file within our uploads directory that follows
-		// a particular naming pattern
+		f, _ := file.Open()
 		tempFile, err := ioutil.TempFile("uploads", "upload-*"+ext)
 		if err != nil {
 			fmt.Println(err)
+			log.Error(err)
 		}
 		defer tempFile.Close()
 
 		// read all of the contents of our uploaded file into a
 		// byte array
-		fileBytes, err := ioutil.ReadAll(file)
+		fileBytes, err := ioutil.ReadAll(f)
 		if err != nil {
 			fmt.Println(err)
 		}
 		// write this byte array to our temporary file
 		tempFile.Write(fileBytes)
-		// return that we have successfully uploaded our file!
-		attachment = tempFile.Name()
+		attachments = append(attachments, tempFile.Name())
 	}
 
 	r.ParseForm() // Parses the request body
 	from := os.Getenv("SMTP_DEFAULT_FROM")
-	to := r.Form.Get("to") // x will be "" if parameter is not set
+	to := r.Form.Get("to")
+	if to == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "who do i email?")
+		return
+	}
 	cc := r.Form.Get("cc")
 	subject := r.Form.Get("subject")
 	body := r.Form.Get("body")
@@ -95,22 +96,22 @@ func SendHandler(w http.ResponseWriter, r *http.Request) {
 		scheduleTime, err = time.Parse(layout, schedule)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "Schedule time format expected: dd-MM-yyyy hh:mm")
+			fmt.Fprintf(w, "schedule time format expected: dd-MM-yyyy hh:mm")
 			log.Error("schedule time wrong format: " + schedule)
 			return
 		}
-		mysqldb.Save(from, to, subject, body, attachment, "", time.Time{}, scheduleTime.Add(-time.Hour*7), "PENDING")
+		mysqldb.Save(from, to, subject, body, convertArrayToString(attachments), "", time.Time{}, scheduleTime.Add(-time.Hour*7), "PENDING")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "The email has been successfully saved and will automatically be sent when the time comes.")
 		return
 	}
-	//from, strings.Split(to, ";"), subject, body, attachment, ""
-	if !email.Send(email.Email{From: from, To: strings.Split(to, ";"), CC: strings.Split(cc, ";"), Subject: subject, Body: body, Attachment: attachment}) {
-		mysqldb.Save(from, to, subject, body, attachment, "", time.Time{}, time.Time{}, "ERROR")
+
+	if !email.Send(email.Email{From: from, To: strings.Split(to, ";"), CC: strings.Split(cc, ";"), Subject: subject, Body: body, Attachments: attachments}) {
+		mysqldb.Save(from, to, subject, body, convertArrayToString(attachments), "", time.Time{}, time.Time{}, "ERROR")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	} else {
-		mysqldb.Save(from, to, subject, body, attachment, "", time.Now(), time.Time{}, "SENT")
+		mysqldb.Save(from, to, subject, body, "", "", time.Now(), time.Time{}, "SENT")
 	}
 	log.Info("the email has been sent")
 	fmt.Fprintf(w, "the email has been sent successfully!")
@@ -126,7 +127,7 @@ func SendScheduleEmail() {
 		for _, mail := range emails {
 			if mail.ScheduleSentTime.Before(time.Now()) {
 
-				if email.Send(email.Email{From: mail.From, To: strings.Split(mail.To, ";"), CC: strings.Split(mail.CC, ";"), Subject: mail.Subject, Body: mail.Body, Attachment: mail.Attachment}) {
+				if email.Send(email.Email{From: mail.From, To: strings.Split(mail.To, ";"), CC: strings.Split(mail.CC, ";"), Subject: mail.Subject, Body: mail.Body, Attachments: strings.Split(mail.Attachment, ";")}) {
 					db.Model(&mail).Updates(entity.Email{SentTime: time.Now(), Status: "SENT"})
 					log.Info("schedule mail has been sent!")
 				} else {

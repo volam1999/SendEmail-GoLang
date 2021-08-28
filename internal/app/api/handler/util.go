@@ -1,4 +1,4 @@
-package api
+package handler
 
 func convertArrayToString(emails []string) string {
 	result := emails[0]
