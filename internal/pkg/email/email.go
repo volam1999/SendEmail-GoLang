@@ -5,7 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	"main/internal/pkg/log"
+	"github.com/volam1999/gomail/internal/pkg/log"
 
 	"gopkg.in/gomail.v2"
 )
@@ -37,15 +37,17 @@ func Send(email Email) bool {
 	msg := gomail.NewMessage()
 	msg.SetHeader("From", from)
 	msg.SetHeader("To", email.To...)
-	if len(email.CC) > 1 {
+	if email.CC[0] != "" {
 		msg.SetHeader("Cc", email.CC...)
 	}
 
 	msg.SetHeader("Subject", email.Subject)
 	msg.SetBody("text/html", email.Body)
 
-	for _, atm := range email.Attachments {
-		msg.Attach(atm)
+	if email.Attachments[0] != "" {
+		for _, atm := range email.Attachments {
+			msg.Attach(atm)
+		}
 	}
 
 	if err := d.DialAndSend(msg); err != nil {

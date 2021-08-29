@@ -1,4 +1,4 @@
-module main
+module github.com/volam1999/gomail
 
 go 1.17
 

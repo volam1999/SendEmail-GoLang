@@ -11,7 +11,7 @@ import (
 func init() {
 	log.SetFormatter(&logrus.TextFormatter{
 		ForceColors:     true,
-		TimestampFormat: "02/01/2006 15:04",
+		TimestampFormat: "02/01/2006 15:04:05",
 		FullTimestamp:   true,
 	})
 	log.SetOutput(ansicolor.NewAnsiColorWriter(os.Stdout))
