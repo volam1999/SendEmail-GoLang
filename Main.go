@@ -14,6 +14,7 @@ func main() {
 		log.Fatal("Error loading .env file")
 		return
 	}
+
 	go handler.SendScheduleEmail()
 	router := api.NewRouter()
 	http.Handle("/", router)
