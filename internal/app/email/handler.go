@@ -1,3 +1,4 @@
+//go:generate mockgen -source handler.go -destination handler_mock_test.go -package email_test
 package email
 
 import (

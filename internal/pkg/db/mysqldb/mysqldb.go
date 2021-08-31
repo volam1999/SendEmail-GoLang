@@ -26,7 +26,7 @@ func New() *gorm.DB {
 
 func Dial() *gorm.DB {
 	log.Infof("dialing to target MySqlDb at: %v, database: %v", "localhost:3306", envconfig.Database)
-	dsn := fmt.Sprintf("%v:%v@/%v?charset=utf8mb4&parseTime=True&loc=Local", envconfig.Username, envconfig.Password, envconfig.Database)
+	dsn := fmt.Sprintf("%v:%v@/%v?charset=utf8mb4&parseTime=True&loc=Local", "root", envconfig.Password, "testdb")
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal("failed to connect database")

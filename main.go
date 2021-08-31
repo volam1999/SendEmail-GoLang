@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	if envconfig.Error != nil {
+	if envconfig.Error("configs/config.env") != nil {
 		log.Fatal("Error loading .env file")
 		return
 	}
