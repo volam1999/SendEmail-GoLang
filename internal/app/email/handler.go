@@ -1,4 +1,4 @@
-package handler
+package email
 
 import (
 	"encoding/json"
@@ -9,46 +9,62 @@ import (
 	"strings"
 	"time"
 
-	"github.com/volam1999/gomail/internal/app/entity"
+	"github.com/volam1999/gomail/internal/app/types"
 	"github.com/volam1999/gomail/internal/pkg/db/mysqldb"
-	"github.com/volam1999/gomail/internal/pkg/email"
+	mail "github.com/volam1999/gomail/internal/pkg/email"
 
 	"github.com/volam1999/gomail/internal/pkg/log"
 
 	"github.com/gorilla/mux"
 )
 
-func GetAllEmail(w http.ResponseWriter, r *http.Request) {
+type (
+	service interface {
+		Create(email *types.Email) (string, error)
+		FindAll() (*[]types.Email, error)
+		FindByEmailId(emailId string) (*types.Email, error)
+	}
+	Handler struct {
+		srv service
+	}
+)
 
-	db := mysqldb.New()
-	var emails []entity.Email
-	db.Find(&emails)
-	json, _ := json.Marshal(emails)
+func NewHandler(srv service) *Handler {
+	return &Handler{
+		srv: srv,
+	}
+}
+
+func (h *Handler) FindAll(w http.ResponseWriter, r *http.Request) {
+
+	emails, err := h.srv.FindAll()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	fmt.Println(emails)
+	json, _ := json.Marshal(*emails)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(json)
 }
 
-func GetEmailById(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) FindByEmailId(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	db := mysqldb.New()
-
-	var email entity.Email
-	err := db.First(&email, id).Error
+	email, err := h.srv.FindByEmailId(id)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-
 	json, _ := json.Marshal(email)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(json)
 }
 
-func SendEmail(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SendEmail(w http.ResponseWriter, r *http.Request) {
 
 	// Parse our multipart form, 5 << 20 specifies a maximum
 	// upload of 5 MB files.
@@ -96,7 +112,6 @@ func SendEmail(w http.ResponseWriter, r *http.Request) {
 	body := r.Form.Get("body")
 	schedule := r.Form.Get("schedule")
 	scheduleTime := time.Time{}
-	db := mysqldb.New()
 
 	if schedule != "" {
 		layout := "02-01-2006 15:04"
@@ -108,40 +123,43 @@ func SendEmail(w http.ResponseWriter, r *http.Request) {
 			log.Error("schedule time wrong format: " + schedule)
 			return
 		}
-		db.Create(&entity.Email{From: from, To: to, Subject: subject, CC: cc, Body: body, Attachment: convertArrayToString(attachments), ScheduleSentTime: scheduleTime.Add(-time.Hour * 7), Status: "PENDING"})
+
+		//db.Create(&entity.Email{From: from, To: to, Subject: subject, CC: cc, Body: body, Attachment: ConvertArrayToString(attachments), ScheduleSentTime: scheduleTime.Add(-time.Hour * 7), Status: "PENDING"})
+		h.srv.Create(&types.Email{From: from, To: to, Subject: subject, CC: cc, Body: body, Attachment: ConvertArrayToString(attachments), ScheduleSentTime: scheduleTime.Add(-time.Hour * 7), Status: "PENDING"})
 		w.WriteHeader(http.StatusOK)
 		log.Info("the email has been saved and will be sent automatically.")
 		fmt.Fprintf(w, "the email has been saved and will be sent automatically.")
 		return
 	}
 
-	if !email.Send(email.Email{From: from, To: strings.Split(to, ";"), CC: strings.Split(cc, ";"), Subject: subject, Body: body, Attachments: attachments}) {
-		db.Create(&entity.Email{From: from, To: to, CC: cc, Subject: subject, Body: body, Attachment: convertArrayToString(attachments), Status: "ERROR"})
+	if !mail.Send(mail.Email{From: from, To: strings.Split(to, ";"), CC: strings.Split(cc, ";"), Subject: subject, Body: body, Attachments: attachments}) {
+		//db.Create(&entity.Email{From: from, To: to, CC: cc, Subject: subject, Body: body, Attachment: ConvertArrayToString(attachments), Status: "ERROR"})
+		h.srv.Create(&types.Email{From: from, To: to, CC: cc, Subject: subject, Body: body, Attachment: ConvertArrayToString(attachments), Status: "ERROR"})
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	db.Create(&entity.Email{From: from, To: to, CC: cc, Subject: subject, Body: body, Attachment: convertArrayToString(attachments), SentTime: time.Now(), Status: "SENT"})
+	h.srv.Create(&types.Email{From: from, To: to, CC: cc, Subject: subject, Body: body, Attachment: ConvertArrayToString(attachments), SentTime: time.Now(), Status: "SENT"})
+	//db.Create(&entity.Email{From: from, To: to, CC: cc, Subject: subject, Body: body, Attachment: ConvertArrayToString(attachments), SentTime: time.Now(), Status: "SENT"})
 	log.Info("the email has been sent")
 	fmt.Fprintf(w, "the email has been sent successfully!")
 }
 
-func SendScheduleEmail() {
+func (h *Handler) SendScheduleEmail() {
 	log.Warn("automatic check and send schedule email in the database every 20s.")
 	for {
 		db := mysqldb.New()
-		var emails []entity.Email
+		var emails []types.Email
 		db.Where("status = ?", "PENDING").Find(&emails)
 		log.Infof("there are [%v] schedule email in the database", len(emails))
-		for _, mail := range emails {
-			if mail.ScheduleSentTime.Before(time.Now()) {
+		for _, email := range emails {
+			if email.ScheduleSentTime.Before(time.Now()) {
 
-				if email.Send(email.Email{From: mail.From, To: strings.Split(mail.To, ";"), CC: strings.Split(mail.CC, ";"), Subject: mail.Subject, Body: mail.Body, Attachments: strings.Split(mail.Attachment, ";")}) {
-					db.Model(&mail).Updates(entity.Email{SentTime: time.Now(), Status: "SENT"})
-					log.Infof("the scheduled email [%v] has been sent!", mail.Id)
+				if mail.Send(mail.Email{From: email.From, To: strings.Split(email.To, ";"), CC: strings.Split(email.CC, ";"), Subject: email.Subject, Body: email.Body, Attachments: strings.Split(email.Attachment, ";")}) {
+					db.Model(&email).Updates(types.Email{SentTime: time.Now(), Status: "SENT"})
+					log.Infof("the scheduled email [%v] has been sent!", email.Id)
 				} else {
-					db.Model(&mail).Updates(entity.Email{Status: "ERROR"})
-					log.Warnf("the scheduled email [%v] could not be delivered", mail.Id)
+					db.Model(&email).Updates(types.Email{Status: "ERROR"})
+					log.Warnf("the scheduled email [%v] could not be delivered", email.Id)
 				}
 			}
 		}

@@ -31,7 +31,7 @@ func Fatalf(format string, v ...interface{}) {
 }
 
 func Fatal(v ...interface{}) {
-	log.Fatal(v)
+	log.Fatal(v...)
 }
 
 func Warnf(format string, v ...interface{}) {
@@ -39,7 +39,7 @@ func Warnf(format string, v ...interface{}) {
 }
 
 func Warn(v ...interface{}) {
-	log.Warn(v)
+	log.Warn(v...)
 }
 
 func Errorf(format string, v ...interface{}) {
@@ -47,5 +47,5 @@ func Errorf(format string, v ...interface{}) {
 }
 
 func Error(v ...interface{}) {
-	log.Error(v)
+	log.Error(v...)
 }
