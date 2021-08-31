@@ -40,7 +40,7 @@ func (h *Handler) FindAll(w http.ResponseWriter, r *http.Request) {
 
 	emails, err := h.srv.FindAll()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 	fmt.Println(emails)
