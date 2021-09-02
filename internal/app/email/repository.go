@@ -25,6 +25,23 @@ func (r *MysqlDBRepository) Create(email *types.Email) (string, error) {
 	return strconv.Itoa((*email).Id), nil
 }
 
+func (r *MysqlDBRepository) Update(emailId string, email *types.Email) error {
+	err := r.db.Model(&types.Email{}).Where("Id = ?", emailId).Updates(email).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *MysqlDBRepository) FindAllScheduleEmail() (*[]types.Email, error) {
+	var emails []types.Email
+	err := r.db.Where("status = ?", "PENDING").Find(&emails).Error
+	if err != nil {
+		return nil, err
+	}
+	return &emails, nil
+}
+
 func (r *MysqlDBRepository) FindAll() (*[]types.Email, error) {
 	var emails []types.Email
 	result := r.db.Find(&emails)

@@ -7,11 +7,8 @@ import (
 )
 
 var (
+	Error    = godotenv.Load("configs/config.env")
 	Username = os.Getenv("MYSQL_USERNAME")
 	Password = os.Getenv("MYSQL_PASSWORD")
 	Database = os.Getenv("MYSQL_DATABASE")
 )
-
-func Error(filenames ...string) error {
-	return godotenv.Load(filenames...)
-}

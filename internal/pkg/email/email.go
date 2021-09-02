@@ -32,8 +32,10 @@ func Send(email Email) bool {
 		return false
 	}
 	d := gomail.NewDialer(host, portInt, username, password)
-
 	from := os.Getenv("SMTP_DEFAULT_EMAIL")
+	if email.From != "" {
+		from = email.From
+	}
 	msg := gomail.NewMessage()
 	msg.SetHeader("From", from)
 	msg.SetHeader("To", email.To...)

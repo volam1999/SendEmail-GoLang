@@ -9,6 +9,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/volam1999/gomail/internal/app/types"
+	mail "github.com/volam1999/gomail/internal/pkg/email"
 )
 
 // Mockservice is a mock of service interface.
@@ -77,4 +78,30 @@ func (m *Mockservice) FindByEmailId(emailId string) (*types.Email, error) {
 func (mr *MockserviceMockRecorder) FindByEmailId(emailId interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByEmailId", reflect.TypeOf((*Mockservice)(nil).FindByEmailId), emailId)
+}
+
+// Send mocks base method.
+func (m *Mockservice) Send(email mail.Email) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Send", email)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Send indicates an expected call of Send.
+func (mr *MockserviceMockRecorder) Send(email interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*Mockservice)(nil).Send), email)
+}
+
+// SendScheduleEmail mocks base method.
+func (m *Mockservice) SendScheduleEmail() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SendScheduleEmail")
+}
+
+// SendScheduleEmail indicates an expected call of SendScheduleEmail.
+func (mr *MockserviceMockRecorder) SendScheduleEmail() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendScheduleEmail", reflect.TypeOf((*Mockservice)(nil).SendScheduleEmail))
 }

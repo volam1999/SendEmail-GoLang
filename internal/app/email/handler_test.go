@@ -1,27 +1,25 @@
 package email_test
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
 	"github.com/volam1999/gomail/internal/app/email"
 	"github.com/volam1999/gomail/internal/app/types"
+	mail "github.com/volam1999/gomail/internal/pkg/email"
 )
 
 var (
 	email1 = &types.Email{
-		Id:   1,
-		To:   "admin@gmail.com",
-		CC:   "manager@gmail.com",
-		Body: "Hello world",
+		Id: 1,
 	}
 
 	emails = []types.Email{
@@ -32,12 +30,51 @@ var (
 			Id: 2,
 		},
 	}
+
+	requests = []request{
+		{
+			from:        "system@outlook.com",
+			to:          "admin@gmail.com",
+			subject:     "Unit Test",
+			body:        "Learn Unit Test in goLang",
+			attachments: "",
+		},
+		{
+			from:    "system@outlook.com",
+			subject: "Unit Test",
+			body:    "Learn Unit Test in goLang",
+		},
+		{
+			from:     "system@outlook.com",
+			to:       "admin@gmail.com",
+			subject:  "Unit Test",
+			body:     "Learn Unit Test in goLang",
+			schedule: "02-09-2021 11:11",
+		},
+		{
+			from:     "system@outlook.com",
+			to:       "admin@gmail.com",
+			subject:  "Unit Test",
+			body:     "Learn Unit Test in goLang",
+			schedule: "11:11 20-21-2020",
+		},
+	}
 )
 
 //serverErr := errors.New("internal server error")
 type expect struct {
 	code int
 	body string
+}
+
+type request struct {
+	from        string
+	to          string
+	cc          string
+	subject     string
+	body        string
+	schedule    string
+	attachments string
 }
 
 func TestHandlerFindEmailById(t *testing.T) {
@@ -150,46 +187,130 @@ func TestHandlerFindAll(t *testing.T) {
 }
 
 func TestHandlerSendEmail(t *testing.T) {
+
+	emailToSend := mail.Email{
+		From:        requests[0].from,
+		To:          strings.Split(requests[0].to, ";"),
+		Subject:     requests[0].subject,
+		Body:        requests[0].body,
+		CC:          strings.Split(requests[0].cc, ";"),
+		Attachments: []string{},
+	}
+
+	emailToCreate := types.Email{
+		From:       requests[0].from,
+		To:         requests[0].to,
+		Subject:    requests[0].subject,
+		Body:       requests[0].body,
+		CC:         requests[0].cc,
+		Attachment: "",
+		SentTime:   time.Now(),
+		Status:     "SENT",
+	}
+
+	emailErrorToCreate := types.Email{
+		From:       requests[0].from,
+		To:         requests[0].to,
+		Subject:    requests[0].subject,
+		Body:       requests[0].body,
+		CC:         requests[0].cc,
+		Attachment: "",
+		Status:     "ERROR",
+	}
+
+	layout := "02-01-2006 15:04"
+	scheduleTime, _ := time.Parse(layout, requests[2].schedule)
+	emailScheduleToCreate := types.Email{
+		From:             requests[2].from,
+		To:               requests[2].to,
+		Subject:          requests[2].subject,
+		Body:             requests[2].body,
+		CC:               requests[2].cc,
+		Attachment:       "",
+		ScheduleSentTime: scheduleTime.Add(-time.Hour * 7),
+		Status:           "PENDING",
+	}
+
 	srv := NewMockservice(gomock.NewController(t))
 	handler := email.NewHandler(srv)
 	testCases := []struct {
 		name     string
 		tearDown func()
-		input    *types.Email
+		input    request
 		expect   expect
 	}{
 		{
 			name:  "send email success",
-			input: email1,
+			input: requests[0],
+			tearDown: func() {
+				srv.EXPECT().Send(emailToSend).Times(1).Return(true)
+				srv.EXPECT().Create(&emailToCreate).Times(1).Return("", nil)
+			},
 			expect: expect{
 				code: http.StatusOK,
 			},
 		},
 		{
-			name:  "get email data in the database failed no record was found",
-			input: email1,
+			name:  "send email failed because the missing recipient",
+			input: requests[1],
+			tearDown: func() {
+
+			},
 			expect: expect{
-				code: http.StatusNotFound,
+				code: http.StatusBadRequest,
+			},
+		},
+		{
+			name:  "save the email with the schedule success",
+			input: requests[2],
+			tearDown: func() {
+				srv.EXPECT().Create(&emailScheduleToCreate).Times(1).Return("", nil)
+			},
+			expect: expect{
+				code: http.StatusOK,
+			},
+		},
+		{
+			name:  "send email failed because the email has the invalid schedule time format",
+			input: requests[3],
+			tearDown: func() {
+
+			},
+			expect: expect{
+				code: http.StatusBadRequest,
+			},
+		},
+		{
+			name:  "send email failed because the mailler has failed to send",
+			input: requests[0],
+			tearDown: func() {
+				srv.EXPECT().Send(emailToSend).Times(1).Return(false)
+				srv.EXPECT().Create(&emailErrorToCreate).Times(1).Return("", nil)
+			},
+			expect: expect{
+				code: http.StatusInternalServerError,
 			},
 		},
 	}
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
+			test.tearDown()
 			w := httptest.NewRecorder()
-			var inputBody bytes.Buffer
-			if err := json.NewEncoder(&inputBody).Encode(test.input); err != nil {
-				t.Error(err)
-			}
-			r, err := http.NewRequest(http.MethodPost, "", &inputBody)
+			form := fmt.Sprintf("from=%v&to=%v&cc=%v&subject=%v&body=%v&schedule=%v", test.input.from, test.input.to, test.input.cc, test.input.subject, test.input.body, test.input.schedule)
+			r, err := http.NewRequest(http.MethodPost, "", strings.NewReader(form))
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			if err != nil {
 				t.Error(err)
 			}
-
 			handler.SendEmail(w, r)
 			if w.Code != test.expect.code {
 				t.Errorf("got code=%d, wants code=%d", w.Code, test.expect.code)
 			}
 		})
 	}
+}
+
+func TestHandlerSendScheduleEmail(t *testing.T) {
+
 }

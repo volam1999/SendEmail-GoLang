@@ -64,6 +64,21 @@ func (mr *MockRepositoryMockRecorder) FindAll() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockRepository)(nil).FindAll))
 }
 
+// FindAllScheduleEmail mocks base method.
+func (m *MockRepository) FindAllScheduleEmail() (*[]types.Email, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindAllScheduleEmail")
+	ret0, _ := ret[0].(*[]types.Email)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindAllScheduleEmail indicates an expected call of FindAllScheduleEmail.
+func (mr *MockRepositoryMockRecorder) FindAllScheduleEmail() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAllScheduleEmail", reflect.TypeOf((*MockRepository)(nil).FindAllScheduleEmail))
+}
+
 // FindByEmailId mocks base method.
 func (m *MockRepository) FindByEmailId(emailId string) (*types.Email, error) {
 	m.ctrl.T.Helper()
@@ -77,4 +92,18 @@ func (m *MockRepository) FindByEmailId(emailId string) (*types.Email, error) {
 func (mr *MockRepositoryMockRecorder) FindByEmailId(emailId interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByEmailId", reflect.TypeOf((*MockRepository)(nil).FindByEmailId), emailId)
+}
+
+// Update mocks base method.
+func (m *MockRepository) Update(emailId string, email *types.Email) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Update", emailId, email)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Update indicates an expected call of Update.
+func (mr *MockRepositoryMockRecorder) Update(emailId, email interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockRepository)(nil).Update), emailId, email)
 }
