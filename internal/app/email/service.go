@@ -1,4 +1,4 @@
-//go:generate mockgen -source service.go -destination email_mock_test.go -package email_test
+//go:generate mockgen -source service.go -destination service_mock_test.go -package email_test
 package email
 
 import (
