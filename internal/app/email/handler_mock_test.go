@@ -36,10 +36,10 @@ func (m *Mockservice) EXPECT() *MockserviceMockRecorder {
 }
 
 // Create mocks base method.
-func (m *Mockservice) Create(email *types.Email) (string, error) {
+func (m *Mockservice) Create(email *types.Email) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", email)
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -66,7 +66,7 @@ func (mr *MockserviceMockRecorder) FindAll() *gomock.Call {
 }
 
 // FindByEmailId mocks base method.
-func (m *Mockservice) FindByEmailId(emailId string) (*types.Email, error) {
+func (m *Mockservice) FindByEmailId(emailId int) (*types.Email, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FindByEmailId", emailId)
 	ret0, _ := ret[0].(*types.Email)
@@ -81,7 +81,7 @@ func (mr *MockserviceMockRecorder) FindByEmailId(emailId interface{}) *gomock.Ca
 }
 
 // Send mocks base method.
-func (m *Mockservice) Send(email mail.Email) bool {
+func (m *Mockservice) Send(email *mail.Email) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Send", email)
 	ret0, _ := ret[0].(bool)

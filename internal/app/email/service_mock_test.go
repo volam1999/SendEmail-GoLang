@@ -35,10 +35,10 @@ func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 }
 
 // Create mocks base method.
-func (m *MockRepository) Create(email *types.Email) (string, error) {
+func (m *MockRepository) Create(email *types.Email) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", email)
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -80,7 +80,7 @@ func (mr *MockRepositoryMockRecorder) FindAllScheduleEmail() *gomock.Call {
 }
 
 // FindByEmailId mocks base method.
-func (m *MockRepository) FindByEmailId(emailId string) (*types.Email, error) {
+func (m *MockRepository) FindByEmailId(emailId int) (*types.Email, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FindByEmailId", emailId)
 	ret0, _ := ret[0].(*types.Email)
@@ -95,7 +95,7 @@ func (mr *MockRepositoryMockRecorder) FindByEmailId(emailId interface{}) *gomock
 }
 
 // Update mocks base method.
-func (m *MockRepository) Update(emailId string, email *types.Email) error {
+func (m *MockRepository) Update(emailId int, email *types.Email) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Update", emailId, email)
 	ret0, _ := ret[0].(error)

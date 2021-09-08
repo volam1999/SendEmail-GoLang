@@ -1,8 +1,6 @@
 package email
 
 import (
-	"strconv"
-
 	"github.com/volam1999/gomail/internal/app/types"
 	"gorm.io/gorm"
 )
@@ -17,15 +15,15 @@ func NewMysqlDBRepository(db *gorm.DB) *MysqlDBRepository {
 	}
 }
 
-func (r *MysqlDBRepository) Create(email *types.Email) (string, error) {
+func (r *MysqlDBRepository) Create(email *types.Email) (int, error) {
 	result := r.db.Create(email)
 	if result.Error != nil {
-		return "", result.Error
+		return -1, result.Error
 	}
-	return strconv.Itoa((*email).Id), nil
+	return email.Id, nil
 }
 
-func (r *MysqlDBRepository) Update(emailId string, email *types.Email) error {
+func (r *MysqlDBRepository) Update(emailId int, email *types.Email) error {
 	err := r.db.Model(&types.Email{}).Where("Id = ?", emailId).Updates(email).Error
 	if err != nil {
 		return err
@@ -51,7 +49,7 @@ func (r *MysqlDBRepository) FindAll() (*[]types.Email, error) {
 	return &emails, nil
 }
 
-func (r *MysqlDBRepository) FindByEmailId(emailId string) (*types.Email, error) {
+func (r *MysqlDBRepository) FindByEmailId(emailId int) (*types.Email, error) {
 	var email types.Email
 	err := r.db.First(&email, emailId).Error
 	if err != nil {

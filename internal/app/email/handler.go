@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,10 +21,10 @@ import (
 
 type (
 	service interface {
-		Create(email *types.Email) (string, error)
+		Create(email *types.Email) (int, error)
 		FindAll() (*[]types.Email, error)
-		FindByEmailId(emailId string) (*types.Email, error)
-		Send(email mail.Email) bool
+		FindByEmailId(emailId int) (*types.Email, error)
+		Send(email *mail.Email) bool
 		SendScheduleEmail()
 	}
 	Handler struct {
@@ -53,7 +54,11 @@ func (h *Handler) FindAll(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) FindByEmailId(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	id := vars["id"]
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	email, err := h.srv.FindByEmailId(id)
 	if err != nil {
@@ -70,39 +75,58 @@ func (h *Handler) SendEmail(w http.ResponseWriter, r *http.Request) {
 
 	// Parse our multipart form, 5 << 20 specifies a maximum
 	// upload of 5 MB files.
-	r.ParseMultipartForm(5 << 20)
+	err := r.ParseMultipartForm(5 << 20)
 	attachments := []string{}
-	if r.MultipartForm != nil {
-		files := r.MultipartForm.File["attachments"]
-		for _, file := range files {
-			if file.Size > (5 << 20) {
-				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprintf(w, "file {%v} has passed the maximum allowed size of attachments is 5MB", file.Filename)
-				return
-			}
-			ext := file.Filename[len(file.Filename)-4:]
 
-			f, _ := file.Open()
-			tempFile, err := ioutil.TempFile("uploads", "upload-*"+ext)
-			if err != nil {
-				fmt.Println(err)
-				log.Error(err)
-			}
-			defer tempFile.Close()
+	if err != nil && strings.Contains(err.Error(), "isn't multipart/form-data") {
+		// email has no attachment
+		log.Error(err.Error())
+	} else {
+		if r.MultipartForm != nil {
+			files := r.MultipartForm.File["attachments"]
+			for _, file := range files {
 
-			// read all of the contents of our uploaded file into a
-			// byte array
-			fileBytes, err := ioutil.ReadAll(f)
-			if err != nil {
-				fmt.Println(err)
+				if file.Size > (5 << 20) {
+					w.WriteHeader(http.StatusBadRequest)
+					fmt.Fprintf(w, "file {%v} has passed the maximum allowed size of attachments is 5MB", file.Filename)
+					return
+				}
+
+				ext := file.Filename[len(file.Filename)-4:]
+
+				f, err := file.Open()
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					fmt.Fprintf(w, "Read attachment failed!\nFiles: %v ", file.Filename)
+					log.Errorf("Read attachment failed!\nFiles: %v ", file.Filename)
+					return
+				}
+
+				tempFile, err := ioutil.TempFile("uploads", "upload-*"+ext)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					fmt.Fprintf(w, "Write attachment failed! \nFiles: %v ", file.Filename)
+					log.Errorf("Write attachment failed!\nFiles: %v ", file.Filename)
+					return
+				}
+				defer tempFile.Close()
+
+				// read all of the contents of our uploaded file into a
+				// byte array
+				fileBytes, err := ioutil.ReadAll(f)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					fmt.Fprintf(w, "Write attachment failed!\nFiles: %v ", file.Filename)
+					log.Errorf("Write attachment failed!\nFiles: %v ", file.Filename)
+					return
+				}
+				// write this byte array to our temporary file
+				tempFile.Write(fileBytes)
+				attachments = append(attachments, tempFile.Name())
 			}
-			// write this byte array to our temporary file
-			tempFile.Write(fileBytes)
-			attachments = append(attachments, tempFile.Name())
 		}
 	}
 
-	r.ParseForm() // Parses the request body
 	from := r.Form.Get("from")
 	if from == "" {
 		from = os.Getenv("SMTP_DEFAULT_EMAIL")
@@ -118,7 +142,7 @@ func (h *Handler) SendEmail(w http.ResponseWriter, r *http.Request) {
 	body := r.Form.Get("body")
 	schedule := r.Form.Get("schedule")
 	scheduleTime := time.Time{}
-	fmt.Println(from, to, cc, subject, body)
+
 	if schedule != "" {
 		layout := "02-01-2006 15:04"
 		var err error
@@ -130,22 +154,41 @@ func (h *Handler) SendEmail(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		h.srv.Create(&types.Email{From: from, To: to, Subject: subject, CC: cc, Body: body, Attachment: ConvertArrayToString(attachments), ScheduleSentTime: scheduleTime.Add(-time.Hour * 7), Status: "PENDING"})
+		_, err = h.srv.Create(&types.Email{From: from, To: to, Subject: subject, CC: cc, Body: body, Attachment: ConvertArrayToString(attachments), ScheduleSentTime: scheduleTime.Add(-time.Hour * 7), Status: "PENDING"})
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Error("the email has not been saved.", err.Error())
+			fmt.Fprintf(w, "error saving the email in the database, the email will not be delivered")
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 		log.Info("the email has been saved and will be sent automatically.")
 		fmt.Fprintf(w, "the email has been saved and will be sent automatically.")
 		return
 	}
-	//mail.Email{From: from, To: strings.Split(to, ";"), CC: strings.Split(cc, ";"), Subject: subject, Body: body, Attachments: attachments}
-	if !h.srv.Send(mail.Email{From: from, To: strings.Split(to, ";"), CC: strings.Split(cc, ";"), Subject: subject, Body: body, Attachments: attachments}) {
 
-		h.srv.Create(&types.Email{From: from, To: to, CC: cc, Subject: subject, Body: body, Attachment: ConvertArrayToString(attachments), Status: "ERROR"})
+	if !h.srv.Send(&mail.Email{From: from, To: strings.Split(to, ";"), CC: strings.Split(cc, ";"), Subject: subject, Body: body, Attachments: attachments}) {
+		_, err := h.srv.Create(&types.Email{From: from, To: to, CC: cc, Subject: subject, Body: body, Attachment: ConvertArrayToString(attachments), Status: "ERROR"})
+		if err != nil {
+			log.Error("email sending failed and saving data to the database failed")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "email sending failed")
+		return
+	}
+
+	log.Info("the email has been sent")
+	_, err = h.srv.Create(&types.Email{From: from, To: to, CC: cc, Subject: subject, Body: body, Attachment: ConvertArrayToString(attachments), SentTime: time.Now(), Status: "SENT"})
+	if err != nil {
+		log.Error("email sent successfully but saving data to the database failed!")
+		fmt.Fprintf(w, "temail sent successfully but saving data to the database failed!")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	h.srv.Create(&types.Email{From: from, To: to, CC: cc, Subject: subject, Body: body, Attachment: ConvertArrayToString(attachments), SentTime: time.Now(), Status: "SENT"})
-	log.Info("the email has been sent")
 	fmt.Fprintf(w, "the email has been sent successfully!")
 }
 

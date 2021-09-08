@@ -22,7 +22,7 @@ type (
 	}
 )
 
-func Send(email Email) bool {
+func Send(email *Email) bool {
 	username := os.Getenv("SMTP_USERNAME")
 	password := os.Getenv("SMTP_PASSWORD")
 	host, port, _ := net.SplitHostPort(os.Getenv("SMTP_ADDRESS"))

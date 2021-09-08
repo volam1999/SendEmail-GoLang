@@ -25,7 +25,7 @@ func TestCreateEmail(t *testing.T) {
 			name:  "create email succeed",
 			input: email,
 			tearDown: func() {
-				mockedRepo.EXPECT().Create(email).Times(1).Return("", nil)
+				mockedRepo.EXPECT().Create(email).Times(1).Return(1, nil)
 			},
 			output: nil,
 		},
@@ -33,7 +33,7 @@ func TestCreateEmail(t *testing.T) {
 			name:  "create email failed because of database connection failed",
 			input: email,
 			tearDown: func() {
-				mockedRepo.EXPECT().Create(email).Times(1).Return("", dbErr)
+				mockedRepo.EXPECT().Create(email).Times(1).Return(-1, dbErr)
 			},
 			output: dbErr,
 		},

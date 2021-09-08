@@ -244,7 +244,7 @@ func TestHandlerSendEmail(t *testing.T) {
 			input: requests[0],
 			tearDown: func() {
 				srv.EXPECT().Send(emailToSend).Times(1).Return(true)
-				srv.EXPECT().Create(&emailToCreate).Times(1).Return("", nil)
+				srv.EXPECT().Create(&emailToCreate).Times(1).Return(1, nil)
 			},
 			expect: expect{
 				code: http.StatusOK,
@@ -264,7 +264,7 @@ func TestHandlerSendEmail(t *testing.T) {
 			name:  "save the email with the schedule success",
 			input: requests[2],
 			tearDown: func() {
-				srv.EXPECT().Create(&emailScheduleToCreate).Times(1).Return("", nil)
+				srv.EXPECT().Create(&emailScheduleToCreate).Times(1).Return(1, nil)
 			},
 			expect: expect{
 				code: http.StatusOK,
@@ -285,7 +285,7 @@ func TestHandlerSendEmail(t *testing.T) {
 			input: requests[0],
 			tearDown: func() {
 				srv.EXPECT().Send(emailToSend).Times(1).Return(false)
-				srv.EXPECT().Create(&emailErrorToCreate).Times(1).Return("", nil)
+				srv.EXPECT().Create(&emailErrorToCreate).Times(1).Return(1, nil)
 			},
 			expect: expect{
 				code: http.StatusInternalServerError,
