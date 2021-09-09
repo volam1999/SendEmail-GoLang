@@ -7,11 +7,12 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/volam1999/gomail/internal/app/email"
 	types "github.com/volam1999/gomail/internal/app/types"
+	mail "github.com/volam1999/gomail/internal/pkg/email"
 )
 
 func TestCreateEmail(t *testing.T) {
 	mockedRepo := NewMockRepository(gomock.NewController(t))
-	service := email.New(mockedRepo)
+	service := email.New(mockedRepo, mail.Mailer{})
 
 	email := &types.Email{From: "a", To: "b", CC: "c"}
 	dbErr := errors.New("cannot connect to database")

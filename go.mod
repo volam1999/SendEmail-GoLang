@@ -27,4 +27,7 @@ require (
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 // indirect
 )
 
-require github.com/golang/mock v1.6.0 // indirect
+require (
+	github.com/golang/mock v1.6.0 // indirect
+	github.com/kelseyhightower/envconfig v1.4.0
+)

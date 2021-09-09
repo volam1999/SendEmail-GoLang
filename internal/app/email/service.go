@@ -20,13 +20,15 @@ type (
 	}
 
 	Service struct {
-		repo Repository
+		repo   Repository
+		mailer mail.Mailer
 	}
 )
 
-func New(repo Repository) *Service {
+func New(repo Repository, mailer mail.Mailer) *Service {
 	return &Service{
-		repo: repo,
+		repo:   repo,
+		mailer: mailer,
 	}
 }
 
@@ -46,8 +48,8 @@ func (s *Service) Update(emailId int, email *types.Email) error {
 	return s.repo.Update(emailId, email)
 }
 
-func (s *Service) Send(email *mail.Email) bool {
-	return mail.Send(email)
+func (s *Service) Send(email *mail.Email) error {
+	return s.mailer.Send(email)
 }
 
 func (s *Service) SendScheduleEmail() {
@@ -65,11 +67,19 @@ func (s *Service) SendScheduleEmail() {
 		for _, email := range *emails {
 			if email.ScheduleSentTime.Before(time.Now()) {
 
-				if s.Send(&mail.Email{From: email.From, To: strings.Split(email.To, ";"), CC: strings.Split(email.CC, ";"), Subject: email.Subject, Body: email.Body, Attachments: strings.Split(email.Attachment, ";")}) {
-					s.repo.Update(email.Id, &types.Email{SentTime: time.Now(), Status: "SENT"})
+				if err := s.Send(&mail.Email{From: email.From, To: strings.Split(email.To, ";"), CC: strings.Split(email.CC, ";"), Subject: email.Subject, Body: email.Body, Attachments: strings.Split(email.Attachment, ";")}); err != nil {
+					err := s.repo.Update(email.Id, &types.Email{SentTime: time.Now(), Status: "SENT"})
+					if err != nil {
+						log.Error("the scheduled email [%v] has been sent! but have an error when saving to the db", email.Id)
+						continue
+					}
 					log.Infof("the scheduled email [%v] has been sent!", email.Id)
 				} else {
-					s.repo.Update(email.Id, &types.Email{Status: "ERROR"})
+					err := s.repo.Update(email.Id, &types.Email{Status: "ERROR"})
+					if err != nil {
+						log.Error("the scheduled email [%v] could not be delivered! and have an error when saving to the db", email.Id)
+						continue
+					}
 					log.Warnf("the scheduled email [%v] could not be delivered", email.Id)
 				}
 			}

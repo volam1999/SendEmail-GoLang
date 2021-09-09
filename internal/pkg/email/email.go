@@ -1,10 +1,12 @@
 package mail
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"strconv"
 
+	"github.com/volam1999/gomail/internal/pkg/config/envconfig"
 	"github.com/volam1999/gomail/internal/pkg/log"
 
 	"gopkg.in/gomail.v2"
@@ -20,18 +22,42 @@ type (
 		Attachments []string
 		Template    string
 	}
+
+	Mailer struct {
+		dialer *gomail.Dialer
+	}
+
+	Config struct {
+		Address     string `envconfig:"SMTP_ADDRESS"`
+		Username    string `envconfig:"SMTP_USERNAME"`
+		Password    string `envconfig:"SMTP_PASSWORD"`
+		DefaultFrom string `envconfig:"SMTP_DEFAULT_FROM" default:"goway382@gmail.com"`
+	}
 )
 
-func Send(email *Email) bool {
-	username := os.Getenv("SMTP_USERNAME")
-	password := os.Getenv("SMTP_PASSWORD")
-	host, port, _ := net.SplitHostPort(os.Getenv("SMTP_ADDRESS"))
+func LoadConfigFromEnv() *Config {
+	var conf Config
+	envconfig.Load("", &conf)
+	return &conf
+}
+
+func New(conf *Config) (*Mailer, error) {
+	username := conf.Username
+	password := conf.Password
+	host, port, _ := net.SplitHostPort(conf.Address)
 	portInt, err := strconv.Atoi(port)
 	if err != nil {
-		log.Error("address must be in form of <host>:<port>: %w", err)
-		return false
+		return nil, fmt.Errorf("address must be in form of <host>:<port>: %w", err)
 	}
 	d := gomail.NewDialer(host, portInt, username, password)
+
+	return &Mailer{
+		dialer: d,
+	}, nil
+}
+
+func (m *Mailer) Send(email *Email) error {
+
 	from := os.Getenv("SMTP_DEFAULT_EMAIL")
 	if email.From != "" {
 		from = email.From
@@ -52,9 +78,9 @@ func Send(email *Email) bool {
 		}
 	}
 
-	if err := d.DialAndSend(msg); err != nil {
+	if err := m.dialer.DialAndSend(msg); err != nil {
 		log.Error("failed to send mail: %w", err)
-		return false
+		return err
 	}
-	return true
+	return nil
 }

@@ -81,10 +81,10 @@ func (mr *MockserviceMockRecorder) FindByEmailId(emailId interface{}) *gomock.Ca
 }
 
 // Send mocks base method.
-func (m *Mockservice) Send(email *mail.Email) bool {
+func (m *Mockservice) Send(email *mail.Email) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Send", email)
-	ret0, _ := ret[0].(bool)
+	ret0, _ := ret[0].(error)
 	return ret0
 }
 

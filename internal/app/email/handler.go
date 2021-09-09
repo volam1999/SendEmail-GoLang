@@ -24,7 +24,7 @@ type (
 		Create(email *types.Email) (int, error)
 		FindAll() (*[]types.Email, error)
 		FindByEmailId(emailId int) (*types.Email, error)
-		Send(email *mail.Email) bool
+		Send(email *mail.Email) error
 		SendScheduleEmail()
 	}
 	Handler struct {
@@ -168,7 +168,7 @@ func (h *Handler) SendEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.srv.Send(&mail.Email{From: from, To: strings.Split(to, ";"), CC: strings.Split(cc, ";"), Subject: subject, Body: body, Attachments: attachments}) {
+	if err := h.srv.Send(&mail.Email{From: from, To: strings.Split(to, ";"), CC: strings.Split(cc, ";"), Subject: subject, Body: body, Attachments: attachments}); err != nil {
 		_, err := h.srv.Create(&types.Email{From: from, To: to, CC: cc, Subject: subject, Body: body, Attachment: ConvertArrayToString(attachments), Status: "ERROR"})
 		if err != nil {
 			log.Error("email sending failed and saving data to the database failed")
