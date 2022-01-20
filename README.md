@@ -9,3 +9,5 @@ https://colab.research.google.com/drive/1QXP2NZJq6gF1BYybreoxnZd25tEqQAWf?usp=sh
 https://github.com/bnsreenu/python_for_microscopists/blob/master/180_LSTM_encoder_decoder_anomaly_GE.py
 
 https://github.com/amin2997/Anomaly-Detection-in-Time-Series-Data-with-Keras
+
+https://colab.research.google.com/drive/1CyQZRJHqGRz7d4YPQR-Ltt_hBMMPc_Wx#scrollTo=EsCV9fkRdkSc
